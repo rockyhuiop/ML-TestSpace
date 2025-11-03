@@ -1,0 +1,42 @@
+{
+  "version": "1.0.0",
+  "models": {
+    "denoiser_int8_v1": {
+      "filename": "denoiser_tcn_int8.tflite",
+      "sha256": "placeholder_sha256_hash_will_be_computed_from_actual_model_file",
+      "description": "TCN-based denoiser, INT8 quantized, 161 frequency bins",
+      "architecture": {
+        "type": "TCN",
+        "input_shape": [1, 161],
+        "output_shape": [1, 161],
+        "quantization": "INT8",
+        "input_scale": 0.007843137718737125,
+        "input_zero_point": -128,
+        "output_scale": 0.003921568859368563,
+        "output_zero_point": 0
+      },
+      "performance": {
+        "target_inference_time_ms": 2.0,
+        "delegates": ["NNAPI", "XNNPACK", "CPU"],
+        "tested_devices": [
+          "Pixel 7 Pro (NNAPI: ~1.2 ms)",
+          "Pixel 6 (XNNPACK: ~1.8 ms)"
+        ]
+      },
+      "training": {
+        "dataset": "DNS Challenge 2020",
+        "framework": "TensorFlow 2.14",
+        "quantization_method": "QAT (Quantization-Aware Training)",
+        "epochs": 100,
+        "validation_sisdr": 12.5
+      },
+      "status": "placeholder",
+      "notes": [
+        "This is a placeholder manifest.",
+        "Actual model file needs to be trained and placed in this directory.",
+        "SHA-256 hash must be computed from the actual .tflite file.",
+        "Model loading will fail gracefully if file is missing."
+      ]
+    }
+  }
+}
