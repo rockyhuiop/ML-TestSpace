@@ -114,7 +114,39 @@ public:
      * Check if currently recording.
      */
     bool IsRecording() const { return is_recording_.load(std::memory_order_acquire); }
-/**     * Set processing preset (Phase 7, User Story 3).     *     * Updates DSP pipeline configuration atomically:     * - Buffer sizing (hop count)     * - AEC filter length     * - Denoiser frame rate     * - RES enable/disable     *     * @param preset Preset name ("Low-latency" | "Quality" | "Battery saver")     * @return true on success, false on invalid preset     */    bool SetPreset(const std::string& preset);    /**     * Get current preset name.     */    std::string GetPreset() const { return preset_; }
+
+    /**
+     * Set processing preset (Phase 7, User Story 3).
+     *
+     * Updates DSP pipeline configuration atomically:
+     * - Buffer sizing (hop count)
+     * - AEC filter length
+     * - Denoiser frame rate
+     * - RES enable/disable
+     *
+     * @param preset Preset name ("Low-latency" | "Quality" | "Battery saver")
+     * @return true on success, false on invalid preset
+     */
+    bool SetPreset(const std::string& preset);
+
+    /**
+     * Get current preset name.
+     */
+    std::string GetPreset() const { return preset_; }
+
+    /**
+     * Phase 8 T099: Component toggle methods.
+     *
+     * These methods update component enable flags using atomic stores with
+     * memory_order_release for thread-safe communication to DSP worker.
+     *
+     * @param enabled New enable/disable state
+     * @return true on success, false if session not active
+     */
+    bool SetAECEnabled(bool enabled);
+    bool SetRESEnabled(bool enabled);
+    bool SetDenoiserEnabled(bool enabled);
+    bool SetAVVADEnabled(bool enabled);
 
     /**
      * Get WAV writers for DSP worker to write samples.
@@ -157,6 +189,9 @@ private:
     int32_t sample_rate_;
     int32_t hop_size_;
     std::string preset_;
+
+    // Phase 8: Component state with atomic flags
+    std::unique_ptr<SessionState> session_state_;
 
     // Recording state (Phase 6)
     std::atomic<bool> is_recording_{false};

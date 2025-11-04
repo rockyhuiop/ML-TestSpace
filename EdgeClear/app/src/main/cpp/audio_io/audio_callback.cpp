@@ -28,6 +28,12 @@ void AudioCallback::OnCaptureData(const int16_t* data, int32_t numFrames) {
     // Accumulates until 480 samples @ 48 kHz are available,
     // then produces 160 samples @ 16 kHz
 
+    static int callback_count = 0;
+    if (++callback_count % 100 == 0) {  // Log every 100th callback (~1 second)
+        __android_log_print(ANDROID_LOG_INFO, LOG_TAG,
+            "OnCaptureData called: numFrames=%d, callback_count=%d", numFrames, callback_count);
+    }
+
     rt::DSPFrameBuffer frame;
     int32_t output_count = 0;
 
@@ -52,6 +58,14 @@ void AudioCallback::OnCaptureData(const int16_t* data, int32_t numFrames) {
         if (!input_queue_->Push(frame)) {
             // Queue overflow - drop frame and increment XRun counter
             perf_counters_->IncrementXRun();
+            __android_log_print(ANDROID_LOG_ERROR, LOG_TAG,
+                "Input queue overflow - capture producing too fast");
+        } else {
+            static int push_count = 0;
+            if (++push_count % 50 == 0) {  // Log every 50th push (~0.5 seconds)
+                __android_log_print(ANDROID_LOG_INFO, LOG_TAG,
+                    "Pushed frame to input queue: count=%d", push_count);
+            }
         }
     }
     // else: Not enough samples yet, will accumulate on next callback
@@ -60,6 +74,12 @@ void AudioCallback::OnCaptureData(const int16_t* data, int32_t numFrames) {
 void AudioCallback::OnRenderData(int16_t* data, int32_t numFrames) {
     // We need to fill numFrames @ 48 kHz
     // Each DSP hop produces 160 samples @ 16 kHz = 480 samples @ 48 kHz
+
+    static int callback_count = 0;
+    if (++callback_count % 100 == 0) {  // Log every 100th callback (~1 second)
+        __android_log_print(ANDROID_LOG_INFO, LOG_TAG,
+            "OnRenderData called: numFrames=%d, callback_count=%d", numFrames, callback_count);
+    }
 
     int32_t written = 0;
 

@@ -10,6 +10,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.edgeclear.audio.Presets
 import com.edgeclear.viewmodel.MonitorViewModel
 import com.edgeclear.ui.controls.PresetSelector
+import com.edgeclear.ui.controls.ComponentToggle
+import kotlinx.coroutines.launch
 /**
  * MonitorScreen: Main monitoring UI
  *
@@ -29,13 +31,19 @@ fun MonitorScreen(
     val metrics by viewModel.metrics.collectAsState()
     val session by viewModel.session.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
         // Header
         Text(
             text = "EdgeClear Monitor",
@@ -47,6 +55,7 @@ fun MonitorScreen(
         if (isMonitoring && metrics != null) {
             MetricsOverlay(
                 metrics = metrics!!,
+                componentState = session?.componentState,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
@@ -65,22 +74,105 @@ fun MonitorScreen(
             )
         }
 
-        // Phase 8 TODO: Component toggles will be added here (AEC, RES, Denoiser, AV-VAD)
-        // Phase 6 T081: When toggles are added, implement lock check:
-        //   val isRecordingActive by viewModel.isRecordingActive.collectAsState()
-        //   val snackbarHostState = remember { SnackbarHostState() }
-        //
-        //   In each toggle onClick:
-        //     if (isRecordingActive) {
-        //         scope.launch {
-        //             snackbarHostState.showSnackbar(
-        //                 message = "Cannot change components during recording",
-        //                 duration = SnackbarDuration.Short
-        //             )
-        //         }
-        //     } else {
-        //         // Allow toggle
-        //     }
+        // Component toggles (Phase 8: T097)
+        if (session != null) {
+            val isRecordingActive by viewModel.isRecordingActive.collectAsState()
+            val componentState = session!!.componentState
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "DSP Components",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    // AEC Toggle
+                    ComponentToggle(
+                        label = "AEC (Echo Cancellation)",
+                        checked = componentState.aecEnabled,
+                        onCheckedChange = { enabled ->
+                            if (isRecordingActive) {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        message = "Cannot change components during recording",
+                                        duration = SnackbarDuration.Short
+                                    )
+                                }
+                            } else {
+                                viewModel.toggleComponent("aec", enabled)
+                            }
+                        },
+                        enabled = isMonitoring && !isRecordingActive
+                    )
+
+                    // RES Toggle
+                    ComponentToggle(
+                        label = "RES (Residual Echo Suppressor)",
+                        checked = componentState.resEnabled,
+                        onCheckedChange = { enabled ->
+                            if (isRecordingActive) {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        message = "Cannot change components during recording",
+                                        duration = SnackbarDuration.Short
+                                    )
+                                }
+                            } else {
+                                viewModel.toggleComponent("res", enabled)
+                            }
+                        },
+                        enabled = isMonitoring && !isRecordingActive
+                    )
+
+                    // Denoiser Toggle
+                    ComponentToggle(
+                        label = "Denoiser",
+                        checked = componentState.denoiserEnabled,
+                        onCheckedChange = { enabled ->
+                            if (isRecordingActive) {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        message = "Cannot change components during recording",
+                                        duration = SnackbarDuration.Short
+                                    )
+                                }
+                            } else {
+                                viewModel.toggleComponent("denoiser", enabled)
+                            }
+                        },
+                        enabled = isMonitoring && !isRecordingActive
+                    )
+
+                    // AV-VAD Toggle
+                    ComponentToggle(
+                        label = "AV-VAD (Audio-Visual VAD)",
+                        checked = componentState.avVadEnabled,
+                        onCheckedChange = { enabled ->
+                            if (isRecordingActive) {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        message = "Cannot change components during recording",
+                                        duration = SnackbarDuration.Short
+                                    )
+                                }
+                            } else {
+                                viewModel.toggleComponent("av_vad", enabled)
+                            }
+                        },
+                        enabled = isMonitoring && !isRecordingActive
+                    )
+                }
+            }
+        }
+
         // Phase 7 T095: Preset selector (disabled during recording)
         if (session != null) {
             val isRecordingActive by viewModel.isRecordingActive.collectAsState()
@@ -125,6 +217,7 @@ fun MonitorScreen(
                 text = if (isMonitoring) "Stop Monitoring" else "Start Monitoring",
                 style = MaterialTheme.typography.titleMedium
             )
+        }
         }
     }
 }

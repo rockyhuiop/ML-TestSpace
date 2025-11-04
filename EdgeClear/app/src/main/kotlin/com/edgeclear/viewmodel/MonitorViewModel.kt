@@ -227,6 +227,64 @@ class MonitorViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    /**
+     * Phase 8 T098: Toggle DSP component on/off.
+     *
+     * Updates component state in both Kotlin and native C++ layers.
+     * Uses atomic bool stores with release ordering for thread-safe communication.
+     *
+     * @param componentName Component identifier: "aec", "res", "denoiser", "av_vad"
+     * @param enabled New enable/disable state
+     */
+    fun toggleComponent(componentName: String, enabled: Boolean) {
+        if (!_isMonitoring.value) {
+            _errorMessage.value = "Cannot toggle component: no active session"
+            return
+        }
+
+        if (sessionHandle == 0L) {
+            _errorMessage.value = "Invalid session"
+            return
+        }
+
+        // Check recording lock (should already be prevented by UI, but double-check)
+        if (_isRecordingActive.value) {
+            _errorMessage.value = "Cannot change components during recording"
+            return
+        }
+
+        val currentSession = _session.value
+        if (currentSession == null) {
+            _errorMessage.value = "No active session"
+            return
+        }
+
+        viewModelScope.launch {
+            // Call native JNI method to update component state atomically
+            val success = NativeAudioEngine.nativeSetComponentState(
+                sessionHandle,
+                componentName,
+                enabled
+            )
+
+            if (success) {
+                // Update local session state
+                val updatedComponentState = when (componentName) {
+                    "aec" -> currentSession.componentState.copy(aecEnabled = enabled)
+                    "res" -> currentSession.componentState.copy(resEnabled = enabled)
+                    "denoiser" -> currentSession.componentState.copy(denoiserEnabled = enabled)
+                    "av_vad" -> currentSession.componentState.copy(avVadEnabled = enabled)
+                    else -> currentSession.componentState
+                }
+
+                _session.value = currentSession.copy(componentState = updatedComponentState)
+                _errorMessage.value = null
+            } else {
+                _errorMessage.value = "Failed to toggle component: $componentName"
+            }
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         stopMonitoring()

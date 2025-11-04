@@ -46,15 +46,21 @@ object NativeAudioEngine {
         preset: String         // "Low-latency" | "Quality" | "Battery saver"
     ): Boolean                 // Returns true on success, false if restart required
 
-    // Component Control
+    // Component Control (Phase 8 T098)
 
+    /**
+     * Set DSP component state with atomic bool stores (release ordering).
+     *
+     * @param sessionHandle Session handle from nativeInitSession
+     * @param componentName Component identifier: "aec", "res", "denoiser", "av_vad"
+     * @param enabled New enable/disable state
+     * @return true on success, false if component doesn't exist or session invalid
+     */
     external fun nativeSetComponentState(
         sessionHandle: Long,
-        aecEnabled: Boolean,
-        resEnabled: Boolean,
-        denoiserEnabled: Boolean,
-        avVadEnabled: Boolean
-    )
+        componentName: String,
+        enabled: Boolean
+    ): Boolean
 
     // Metrics Retrieval
 

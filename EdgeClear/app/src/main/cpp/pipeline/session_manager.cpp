@@ -1,6 +1,7 @@
 #include "session_manager.h"
 #include "../audio_io/latency_probe.h"
 #include <android/log.h>
+#include <ctime>
 
 #define LOG_TAG "EdgeClear-Session"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -34,6 +35,11 @@ bool SessionManager::Initialize(int32_t sampleRate, int32_t hopSize,
     sample_rate_ = sampleRate;
     hop_size_ = hopSize;
     preset_ = preset;
+
+    // Phase 8: Create session state with component flags (atomic, initialized to default)
+    session_state_ = std::make_unique<SessionState>();
+    session_state_->session_id = static_cast<uint64_t>(std::time(nullptr));
+    session_state_->is_active = false;  // Will be set true in Start()
 
     // Create performance counters
     perf_counters_ = std::make_unique<rt::PerfCounters>();
@@ -528,6 +534,96 @@ bool SessionManager::SetPreset(const std::string& preset) {
     (void)buffer_hops;
     (void)aec_partitions;
     (void)previous_preset;
+
+    return true;
+}
+
+/**
+ * Phase 8 T099: Component toggle methods.
+ *
+ * These methods update component enable flags using atomic stores with
+ * memory_order_release for thread-safe communication to DSP worker.
+ */
+
+bool SessionManager::SetAECEnabled(bool enabled) {
+    if (!is_active_) {
+        LOGE("SetAECEnabled: Session not active");
+        return false;
+    }
+
+    if (!session_state_) {
+        LOGE("SetAECEnabled: Session state not initialized");
+        return false;
+    }
+
+    // Atomic store with release ordering - ensures visibility to DSP worker
+    session_state_->aec_enabled.store(enabled, std::memory_order_release);
+    LOGI("AEC %s", enabled ? "enabled" : "disabled");
+
+    return true;
+}
+
+bool SessionManager::SetRESEnabled(bool enabled) {
+    if (!is_active_) {
+        LOGE("SetRESEnabled: Session not active");
+        return false;
+    }
+
+    if (!session_state_) {
+        LOGE("SetRESEnabled: Session state not initialized");
+        return false;
+    }
+
+    // Atomic store with release ordering
+    session_state_->res_enabled.store(enabled, std::memory_order_release);
+    LOGI("RES %s", enabled ? "enabled" : "disabled");
+
+    // Also update DSP worker's RES flag (if preset API exists)
+    if (dsp_worker_) {
+        dsp_worker_->SetRESEnabled(enabled);
+    }
+
+    return true;
+}
+
+bool SessionManager::SetDenoiserEnabled(bool enabled) {
+    if (!is_active_) {
+        LOGE("SetDenoiserEnabled: Session not active");
+        return false;
+    }
+
+    if (!session_state_) {
+        LOGE("SetDenoiserEnabled: Session state not initialized");
+        return false;
+    }
+
+    // Atomic store with release ordering
+    session_state_->denoiser_enabled.store(enabled, std::memory_order_release);
+    LOGI("Denoiser %s", enabled ? "enabled" : "disabled");
+
+    return true;
+}
+
+bool SessionManager::SetAVVADEnabled(bool enabled) {
+    if (!is_active_) {
+        LOGE("SetAVVADEnabled: Session not active");
+        return false;
+    }
+
+    if (!session_state_) {
+        LOGE("SetAVVADEnabled: Session state not initialized");
+        return false;
+    }
+
+    // Atomic store with release ordering
+    session_state_->av_vad_enabled.store(enabled, std::memory_order_release);
+    LOGI("AV-VAD %s", enabled ? "enabled" : "disabled");
+
+    // AV-VAD implementation is Phase 9 (User Story 5)
+    // For now, just update the flag. Full camera integration in T105-T118.
+    if (enabled) {
+        LOGI("AV-VAD feature requested but not yet implemented (Phase 9)");
+    }
 
     return true;
 }

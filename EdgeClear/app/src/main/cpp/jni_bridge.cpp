@@ -95,24 +95,53 @@ Java_com_edgeclear_jni_NativeAudioEngine_nativeDestroySession(
 }
 
 /**
- * Set component enable/disable state.
+ * Set component enable/disable state (Phase 8 T098).
+ *
+ * Updates component flags using atomic bool stores with memory_order_release
+ * for thread-safe communication between UI thread and DSP worker.
+ *
+ * @param session_handle Session handle from nativeInitSession
+ * @param component_name Component identifier: "aec", "res", "denoiser", "av_vad"
+ * @param enabled New enable/disable state
+ * @return true on success, false if component doesn't exist or session invalid
  */
-JNIEXPORT void JNICALL
+JNIEXPORT jboolean JNICALL
 Java_com_edgeclear_jni_NativeAudioEngine_nativeSetComponentState(
         JNIEnv* env,
         jobject /* this */,
         jlong session_handle,
-        jboolean aec_enabled,
-        jboolean res_enabled,
-        jboolean denoiser_enabled,
-        jboolean av_vad_enabled) {
-    (void)env;  // Unused parameter
-    (void)session_handle;  // Unused in stub implementation
+        jstring component_name,
+        jboolean enabled) {
 
-    LOGI("nativeSetComponentState: AEC=%d RES=%d Denoiser=%d AV-VAD=%d",
-         aec_enabled, res_enabled, denoiser_enabled, av_vad_enabled);
+    if (session_handle == 0) {
+        LOGE("nativeSetComponentState: Invalid session handle");
+        return JNI_FALSE;
+    }
 
-    // TODO: Update component flags in session state (atomic stores)
+    const char* component_str = env->GetStringUTFChars(component_name, nullptr);
+    LOGI("nativeSetComponentState: component=%s, enabled=%d", component_str, enabled);
+
+    auto* session = reinterpret_cast<pipeline::SessionManager*>(session_handle);
+
+    // Route to appropriate component toggle method
+    bool success = false;
+    std::string component(component_str);
+
+    if (component == "aec") {
+        success = session->SetAECEnabled(enabled == JNI_TRUE);
+    } else if (component == "res") {
+        success = session->SetRESEnabled(enabled == JNI_TRUE);
+    } else if (component == "denoiser") {
+        success = session->SetDenoiserEnabled(enabled == JNI_TRUE);
+    } else if (component == "av_vad") {
+        success = session->SetAVVADEnabled(enabled == JNI_TRUE);
+    } else {
+        LOGE("nativeSetComponentState: Unknown component '%s'", component_str);
+    }
+
+    env->ReleaseStringUTFChars(component_name, component_str);
+
+    return success ? JNI_TRUE : JNI_FALSE;
 }
 
 /**
