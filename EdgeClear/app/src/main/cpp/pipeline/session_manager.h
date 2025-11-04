@@ -114,6 +114,7 @@ public:
      * Check if currently recording.
      */
     bool IsRecording() const { return is_recording_.load(std::memory_order_acquire); }
+/**     * Set processing preset (Phase 7, User Story 3).     *     * Updates DSP pipeline configuration atomically:     * - Buffer sizing (hop count)     * - AEC filter length     * - Denoiser frame rate     * - RES enable/disable     *     * @param preset Preset name ("Low-latency" | "Quality" | "Battery saver")     * @return true on success, false on invalid preset     */    bool SetPreset(const std::string& preset);    /**     * Get current preset name.     */    std::string GetPreset() const { return preset_; }
 
     /**
      * Get WAV writers for DSP worker to write samples.

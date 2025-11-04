@@ -90,6 +90,23 @@ public:
      */
     void SetDenoiserEnabled(bool enabled) { denoiser_enabled_ = enabled; }
 #endif
+    /**
+     * Set denoiser decimation rate (Phase 7 Task T092).
+     *
+     * Decimation = 1: Process every hop (default, Quality preset)
+     * Decimation = 2: Process every 2nd hop (Battery saver preset)
+     *
+     * Saves ~1.5 ms CPU per skipped hop.
+     */
+    void SetDenoiserDecimation(int decimation) { denoiser_decimation_ = decimation; }
+
+    /**
+     * Enable/disable RES post-filter (Phase 7 Task T092).
+     *
+     * RES provides +3 dB ERLE but costs ~0.2 ms CPU.
+     * Enabled in Quality preset, disabled in Low-latency and Battery saver.
+     */
+    void SetRESEnabled(bool enabled) { res_enabled_ = enabled; }
 
     /**
      * Get current DTD state.
@@ -141,6 +158,11 @@ private:
     std::unique_ptr<aec::DTD> dtd_;
     std::unique_ptr<aec::RES> res_;
     bool aec_enabled_;
+
+    // Phase 7: Preset control variables (used unconditionally)
+    int denoiser_decimation_{1};   // Denoiser decimation rate (1 or 2)
+    int frame_counter_{0};         // Frame counter for decimation
+    bool res_enabled_{true};       // RES enable/disable flag
 
 #ifdef HAVE_TFLITE
     // Phase 5 M3: Denoiser modules

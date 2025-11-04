@@ -159,6 +159,7 @@ void DSPWorker::WorkerLoop() {
 
 void DSPWorker::ProcessFrame(const rt::DSPFrameBuffer& input,
                               rt::DSPFrameBuffer& output) {
+    // Phase 7 T092: Track frame count for denoiser decimation    frame_counter_++;
     // Phase 6: Capture raw input for recording (before any processing)
     if (raw_writer_) {
         raw_writer_->WriteSamples(input.samples, rt::DSPFrameBuffer::kFrameSize);
@@ -211,7 +212,8 @@ void DSPWorker::ProcessFrame(const rt::DSPFrameBuffer& input,
         bool is_double_talk = (dtd_state == aec::DTD::DOUBLE_TALK);
 
         // Run RES on AEC error spectrum
-        res_->ProcessFrame(error_spectrum_, far_spectrum_, is_double_talk);
+        if (res_enabled_) { res_->ProcessFrame(error_spectrum_, far_spectrum_, is_double_talk);
+        }
 
         // Update DTD metrics
         if (metrics_) {
@@ -221,7 +223,7 @@ void DSPWorker::ProcessFrame(const rt::DSPFrameBuffer& input,
 
 #ifdef HAVE_TFLITE
     // Phase 5 M3: Denoiser processing (frequency domain)
-    if (denoiser_enabled_ && denoiser_ && denoiser_->IsReady()) {
+    // Phase 7 T092: Denoiser decimation (process every Nth frame)    bool should_run_denoiser = denoiser_enabled_ && denoiser_ && denoiser_->IsReady() &&                               (frame_counter_ % denoiser_decimation_ == 0);    if (should_run_denoiser) {
         // Step 1: Compute magnitude spectrum from complex error_spectrum_
         // error_spectrum_ is [re0, im0, re1, im1, ..., re160, im160] (322 floats)
         // magnitude_[i] = sqrt(re[i]^2 + im[i]^2)

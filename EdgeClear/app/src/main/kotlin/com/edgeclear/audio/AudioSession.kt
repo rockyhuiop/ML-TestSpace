@@ -1,4 +1,5 @@
 package com.edgeclear.audio
+// Phase 7: Updated to use new ProcessingPreset data class from ProcessingPreset.kt
 
 import java.time.Instant
 import java.time.Duration
@@ -15,7 +16,7 @@ data class AudioSession(
     val startTime: Instant = Instant.now(),
     var duration: Duration = Duration.ZERO,
     var xrunCount: Int = 0,
-    var currentPreset: ProcessingPreset = ProcessingPreset.QUALITY,
+    var currentPreset: ProcessingPreset = Presets.DEFAULT,
     val componentState: ComponentState = ComponentState(),
     var isRecording: Boolean = false,
     var recordingStartTime: Instant? = null,
@@ -42,52 +43,5 @@ data class AudioSession(
      */
     fun updateDuration() {
         duration = Duration.between(startTime, Instant.now())
-    }
-}
-
-/**
- * ProcessingPreset: Configuration bundle for DSP parameters
- */
-enum class ProcessingPreset(
-    val displayName: String,
-    val targetLatencyMs: Int,
-    val bufferHops: Int,
-    val aecFilterLength: Int,
-    val denoiserFrameRate: Int,
-    val resEnabled: Boolean,
-    val cameraFrameRateHz: Int
-) {
-    LOW_LATENCY(
-        "Low-latency",
-        targetLatencyMs = 25,
-        bufferHops = 1,
-        aecFilterLength = 4,
-        denoiserFrameRate = 1,
-        resEnabled = false,
-        cameraFrameRateHz = 15
-    ),
-    QUALITY(
-        "Quality",
-        targetLatencyMs = 38,
-        bufferHops = 2,
-        aecFilterLength = 8,
-        denoiserFrameRate = 1,
-        resEnabled = true,
-        cameraFrameRateHz = 30
-    ),
-    BATTERY_SAVER(
-        "Battery saver",
-        targetLatencyMs = 35,
-        bufferHops = 2,
-        aecFilterLength = 8,
-        denoiserFrameRate = 2,
-        resEnabled = false,
-        cameraFrameRateHz = 10
-    );
-
-    companion object {
-        fun fromString(name: String): ProcessingPreset {
-            return values().find { it.displayName == name } ?: QUALITY
-        }
     }
 }

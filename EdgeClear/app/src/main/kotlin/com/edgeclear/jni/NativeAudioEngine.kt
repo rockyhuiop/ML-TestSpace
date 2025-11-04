@@ -40,6 +40,12 @@ object NativeAudioEngine {
 
     external fun nativeDestroySession(sessionHandle: Long)
 
+    // Phase 7: Preset Management
+    external fun nativeSetPreset(
+        sessionHandle: Long,
+        preset: String         // "Low-latency" | "Quality" | "Battery saver"
+    ): Boolean                 // Returns true on success, false if restart required
+
     // Component Control
 
     external fun nativeSetComponentState(

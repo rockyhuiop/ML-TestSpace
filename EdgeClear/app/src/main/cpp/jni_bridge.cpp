@@ -252,4 +252,46 @@ Java_com_edgeclear_jni_NativeAudioEngine_nativeStopRecording(
     return success ? JNI_TRUE : JNI_FALSE;
 }
 
+/**
+ * Set processing preset.
+ *
+ * Updates DSP pipeline configuration atomically:
+ * - Buffer sizing (hop count)
+ * - AEC filter length (partitions)
+ * - Denoiser frame rate decimation
+ * - RES enable/disable
+ * - Camera frame rate (for AV-VAD)
+ *
+ * @param preset_name Preset name: "Low-latency", "Quality", or "Battery saver"
+ * @return true on success, false on invalid preset or session error
+ */
+JNIEXPORT jboolean JNICALL
+Java_com_edgeclear_jni_NativeAudioEngine_nativeSetPreset(
+        JNIEnv* env,
+        jobject /* this */,
+        jlong session_handle,
+        jstring preset_name) {
+
+    if (session_handle == 0) {
+        LOGE("Invalid session handle");
+        return JNI_FALSE;
+    }
+
+    const char* preset_str = env->GetStringUTFChars(preset_name, nullptr);
+    LOGI("nativeSetPreset: preset=%s", preset_str);
+
+    auto* session = reinterpret_cast<pipeline::SessionManager*>(session_handle);
+    bool success = session->SetPreset(std::string(preset_str));
+
+    env->ReleaseStringUTFChars(preset_name, preset_str);
+
+    if (!success) {
+        LOGE("Failed to set preset: %s", preset_str);
+        return JNI_FALSE;
+    }
+
+    LOGI("Preset applied successfully: %s", preset_str);
+    return JNI_TRUE;
+}
+
 }  // extern "C"

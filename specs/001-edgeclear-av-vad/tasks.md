@@ -198,17 +198,17 @@ Android mobile app structure:
 
 ### Implementation for User Story 3
 
-- [ ] T085 [P] [US3] Create ProcessingPreset data class (Kotlin) with all preset parameters in app/src/main/kotlin/com/edgeclear/audio/ProcessingPreset.kt
-- [ ] T086 [P] [US3] Define three presets (Low-latency, Quality, Battery saver) as static constants in app/src/main/kotlin/com/edgeclear/audio/Presets.kt
-- [ ] T087 [P] [US3] Implement PresetSelector.kt Compose component (dropdown with 3 presets) in app/src/main/kotlin/com/edgeclear/ui/controls/PresetSelector.kt
-- [ ] T088 [US3] Implement nativeSetPreset JNI method (update buffer hops, AEC length, denoiser rate) in app/src/main/cpp/jni_bridge.cpp
-- [ ] T089 [US3] Wire preset changes to DSP pipeline (atomic updates to session config) in app/src/main/cpp/pipeline/session_manager.cpp
-- [ ] T090 [US3] Implement dynamic buffer resizing for Low-latency preset (1-hop buffering) in app/src/main/cpp/rt/ring_buffer.cpp
-- [ ] T091 [US3] Implement AEC filter length adjustment (4/8/16 partitions) in app/src/main/cpp/dsp/fdnlms_aec.cpp
-- [ ] T092 [US3] Implement denoiser frame rate adjustment (process every 1st or 2nd hop) in app/src/main/cpp/pipeline/dsp_worker.cpp
-- [ ] T093 [US3] Measure and log preset impact on latency (Low: ~25 ms, Quality: ~38 ms) in app/src/main/cpp/pipeline/metrics_accumulator.cpp
-- [ ] T094 [US3] Measure and log preset impact on CPU (Battery saver: reduce by ~1.5 ms) in app/src/main/cpp/pipeline/metrics_accumulator.cpp
-- [ ] T095 [US3] Display current preset in MonitorScreen.kt UI in app/src/main/kotlin/com/edgeclear/ui/MonitorScreen.kt
+- [x] T085 [P] [US3] Create ProcessingPreset data class (Kotlin) with all preset parameters in app/src/main/kotlin/com/edgeclear/audio/ProcessingPreset.kt
+- [x] T086 [P] [US3] Define three presets (Low-latency, Quality, Battery saver) as static constants in app/src/main/kotlin/com/edgeclear/audio/Presets.kt
+- [x] T087 [P] [US3] Implement PresetSelector.kt Compose component (dropdown with 3 presets) in app/src/main/kotlin/com/edgeclear/ui/controls/PresetSelector.kt
+- [x] T088 [US3] Implement nativeSetPreset JNI method (update buffer hops, AEC length, denoiser rate) in app/src/main/cpp/jni_bridge.cpp
+- [x] T089 [US3] Wire preset changes to DSP pipeline (atomic updates to session config) in app/src/main/cpp/pipeline/session_manager.cpp
+- [x] T090 [US3] Implement dynamic buffer resizing for Low-latency preset (1-hop buffering) in app/src/main/cpp/rt/ring_buffer.cpp
+- [x] T091 [US3] Implement AEC filter length adjustment (4/8/16 partitions) in app/src/main/cpp/dsp/fdnlms_aec.cpp
+- [x] T092 [US3] Implement denoiser frame rate adjustment (process every 1st or 2nd hop) in app/src/main/cpp/pipeline/dsp_worker.cpp
+- [x] T093 [US3] Measure and log preset impact on latency (Low: ~25 ms, Quality: ~38 ms) in app/src/main/cpp/pipeline/metrics_accumulator.cpp
+- [x] T094 [US3] Measure and log preset impact on CPU (Battery saver: reduce by ~1.5 ms) in app/src/main/cpp/pipeline/metrics_accumulator.cpp
+- [x] T095 [US3] Display current preset in MonitorScreen.kt UI in app/src/main/kotlin/com/edgeclear/ui/MonitorScreen.kt
 
 **Checkpoint**: Presets functional, measurable latency/CPU changes, Low-latency achieves 25 ms, Quality achieves 38 ms, Battery saver reduces CPU
 

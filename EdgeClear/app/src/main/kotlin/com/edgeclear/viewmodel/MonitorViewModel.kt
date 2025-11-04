@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.edgeclear.audio.AudioSession
 import com.edgeclear.audio.MetricsSnapshot
 import com.edgeclear.audio.ProcessingPreset
+import com.edgeclear.audio.Presets
 import com.edgeclear.jni.NativeAudioEngine
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -50,7 +51,7 @@ class MonitorViewModel(application: Application) : AndroidViewModel(application)
      *
      * @param preset Processing preset (Low-latency, Quality, Battery saver)
      */
-    fun startMonitoring(preset: ProcessingPreset = ProcessingPreset.QUALITY) {
+    fun startMonitoring(preset: ProcessingPreset = Presets.QUALITY) {
         if (_isMonitoring.value) {
             _errorMessage.value = "Already monitoring"
             return
@@ -61,7 +62,7 @@ class MonitorViewModel(application: Application) : AndroidViewModel(application)
             sessionHandle = NativeAudioEngine.nativeInitSession(
                 sampleRate = 48000,
                 hopSize = 160,  // 10 ms @ 16 kHz
-                preset = preset.displayName,
+                preset = preset.name,
                 assetManager = getApplication<Application>().assets
             )
 
@@ -130,12 +131,56 @@ class MonitorViewModel(application: Application) : AndroidViewModel(application)
     }
 
     /**
-     * Change processing preset.
+     * Change processing preset (Phase 7 Task T095).
+     *
+     * Applies preset change to active session. Some preset changes may require
+     * session restart if buffer sizing or AEC filter length differs.
+     *
+     * @param preset New processing preset
      */
     fun changePreset(preset: ProcessingPreset) {
-        // TODO: Implement dynamic preset change via JNI (Phase 7)
-        // For now, requires restart
-        _errorMessage.value = "Preset change requires restart (implement in Phase 7)"
+        if (!_isMonitoring.value) {
+            _errorMessage.value = "Cannot change preset: no active session"
+            return
+        }
+
+        if (sessionHandle == 0L) {
+            _errorMessage.value = "Invalid session"
+            return
+        }
+
+        // Check if recording is active (should lock preset changes too)
+        if (_isRecordingActive.value) {
+            _errorMessage.value = "Cannot change preset during recording"
+            return
+        }
+
+        val currentSession = _session.value
+        if (currentSession == null) {
+            _errorMessage.value = "No active session"
+            return
+        }
+
+        // Check if preset is already active
+        if (currentSession.currentPreset.name == preset.name) {
+            _errorMessage.value = "Preset '${preset.name}' is already active"
+            return
+        }
+
+        viewModelScope.launch {
+            // Call native JNI method to apply preset
+            val success = NativeAudioEngine.nativeSetPreset(sessionHandle, preset.name)
+
+            if (success) {
+                // Update session state
+                _session.value = currentSession.copy(currentPreset = preset)
+                _errorMessage.value = null
+            } else {
+                // Preset change failed (likely requires session restart)
+                _errorMessage.value = "Preset change requires session restart. " +
+                        "Stop monitoring and restart with '${preset.name}' preset."
+            }
+        }
     }
 
     /**

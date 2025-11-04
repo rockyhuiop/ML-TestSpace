@@ -12,7 +12,13 @@
       "Bash(else echo \"NOT_FOUND\")",
       "Bash(fi:*)",
       "Bash(sha256sum:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(./gradlew :app:assembleDebug:*)",
+      "Bash(./gradlew clean:*)",
+      "Bash(adb install:*)",
+      "Bash(\"C:\\Users\\erd25\\AppData\\Local\\Android\\Sdk\\platform-tools\\adb.exe\" install -r app/build/outputs/apk/debug/app-debug.apk)",
+      "Bash(\"C:\\Users\\erd25\\AppData\\Local\\Android\\Sdk\\ndk\\25.1.8937393\\toolchains\\llvm\\prebuilt\\windows-x86_64\\bin\\llvm-nm.exe\" app/build/intermediates/cmake/debug/obj/arm64-v8a/libedgeclear-native.so)",
+      "Bash(\"C:\\Users\\erd25\\AppData\\Local\\Android\\Sdk\\ndk\\25.1.8937393\\toolchains\\llvm\\prebuilt\\windows-x86_64\\bin\\llvm-nm.exe\" \"F:\\MyDatabase\\CAREER\\TestSpace\\ML-TestSpace\\EdgeClear\\app\\build\\intermediates\\cxx\\Debug\\5e6s2f10\\obj\\arm64-v8a\\libedgeclear-native.so\")"
     ],
     "deny": [],
     "ask": []

@@ -53,6 +53,7 @@ public:
      * Reset all metrics (e.g., on session restart).
      */
     void Reset();
+/**     * Log preset change (Phase 7 T093/T094).     *     * Logs the new preset name and expected impact on latency/CPU.     * This allows tracking performance changes across preset switches.     *     * @param preset_name New preset ("Low-latency" | "Quality" | "Battery saver")     */    void LogPresetChange(const std::string& preset_name);
 
 private:
     std::atomic<float> erle_db_;

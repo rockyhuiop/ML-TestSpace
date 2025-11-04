@@ -7,9 +7,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.edgeclear.audio.ProcessingPreset
+import com.edgeclear.audio.Presets
 import com.edgeclear.viewmodel.MonitorViewModel
-
+import com.edgeclear.ui.controls.PresetSelector
 /**
  * MonitorScreen: Main monitoring UI
  *
@@ -59,7 +59,7 @@ fun MonitorScreen(
         // Current preset display
         if (session != null) {
             Text(
-                text = "Preset: ${session!!.currentPreset.displayName}",
+                text = "Preset: ${session!!.currentPreset.name}",
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
@@ -81,6 +81,22 @@ fun MonitorScreen(
         //     } else {
         //         // Allow toggle
         //     }
+        // Phase 7 T095: Preset selector (disabled during recording)
+        if (session != null) {
+            val isRecordingActive by viewModel.isRecordingActive.collectAsState()
+            
+            PresetSelector(
+                selectedPreset = session!!.currentPreset,
+                onPresetSelected = { preset ->
+                    viewModel.changePreset(preset)
+                },
+                enabled = isMonitoring && !isRecordingActive,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+            )
+        }
+
 
         // Error message
         if (errorMessage != null) {
@@ -98,7 +114,7 @@ fun MonitorScreen(
                 if (isMonitoring) {
                     viewModel.stopMonitoring()
                 } else {
-                    viewModel.startMonitoring(ProcessingPreset.QUALITY)
+                    viewModel.startMonitoring(Presets.DEFAULT)
                 }
             },
             modifier = Modifier

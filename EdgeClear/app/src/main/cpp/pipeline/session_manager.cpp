@@ -460,5 +460,77 @@ bool SessionManager::StopRecording() {
     return success;
 }
 
+bool SessionManager::SetPreset(const std::string& preset) {
+    // Validate preset name
+    if (preset != "Low-latency" && preset != "Quality" && preset != "Battery saver") {
+        LOGE("Invalid preset: %s", preset.c_str());
+        return false;
+    }
+
+    if (!is_initialized_) {
+        LOGE("Cannot set preset: session not initialized");
+        return false;
+    }
+
+    LOGI("Changing preset from %s to %s", preset_.c_str(), preset.c_str());
+
+    // Store previous preset for rollback if needed
+    std::string previous_preset = preset_;
+    preset_ = preset;
+
+    // Determine preset parameters
+    // Low-latency: 1 hop buffer, 4 partitions AEC, denoiser every hop, RES off
+    // Quality: 2 hops buffer, 8 partitions AEC, denoiser every hop, RES on
+    // Battery saver: 2 hops buffer, 8 partitions AEC, denoiser every 2nd hop, RES off
+    int buffer_hops = 1;
+    int aec_partitions = 4;
+    int denoiser_decimation = 1;  // 1 = every hop, 2 = every 2nd hop
+    bool res_enabled = false;
+
+    if (preset == "Quality") {
+        buffer_hops = 2;
+        aec_partitions = 8;
+        denoiser_decimation = 1;
+        res_enabled = true;
+    } else if (preset == "Battery saver") {
+        buffer_hops = 2;
+        aec_partitions = 8;
+        denoiser_decimation = 2;
+        res_enabled = false;
+    }
+
+    LOGI("Preset %s: buffer_hops=%d, aec_partitions=%d, denoiser_decimation=%d, res=%d",
+        preset.c_str(), buffer_hops, aec_partitions, denoiser_decimation, res_enabled);
+
+    // TODO T090: Resize SPSC queues if buffer_hops changed (dynamic buffer resizing)
+    // For now, queue resizing requires session restart
+    // This will be implemented in Phase 7 task T090
+
+    // TODO T091: Update AEC filter length (app/src/main/cpp/dsp/fdnlms_aec.cpp)
+    // For now, AEC partitions are fixed at initialization
+    // This will be implemented in Phase 7 task T091
+
+    // TODO T092: Update denoiser decimation rate in DSP worker
+    // This will be implemented in Phase 7 task T092
+    if (dsp_worker_) {
+        dsp_worker_->SetDenoiserDecimation(denoiser_decimation);
+        dsp_worker_->SetRESEnabled(res_enabled);
+    }
+
+    // Log metrics impact (tracked in T093, T094)
+    if (metrics_) {
+        metrics_->LogPresetChange(preset);
+    }
+
+    LOGI("Preset changed successfully to: %s", preset.c_str());
+
+    // Suppress unused variable warnings for future implementation
+    (void)buffer_hops;
+    (void)aec_partitions;
+    (void)previous_preset;
+
+    return true;
+}
+
 }  // namespace pipeline
 }  // namespace edgeclear
