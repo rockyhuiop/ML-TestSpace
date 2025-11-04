@@ -44,8 +44,9 @@ bool AAudioCapture::Initialize(int32_t sampleRate, int32_t framesPerBurst,
     // Try exclusive sharing mode (fallback to shared if unavailable)
     AAudioStreamBuilder_setSharingMode(builder, AAUDIO_SHARING_MODE_EXCLUSIVE);
 
-    // Set frames per burst (buffer size)
-    AAudioStreamBuilder_setFramesPerBurst(builder, framesPerBurst);
+    // Set frames per burst (buffer size) - Note: setFramesPerBurst not available in older NDK
+    // AAudioStreamBuilder_setFramesPerBurst(builder, framesPerBurst);
+    (void)framesPerBurst;  // Suppress unused parameter warning
 
     // Register callbacks
     AAudioStreamBuilder_setDataCallback(builder, DataCallbackStatic, this);
@@ -118,6 +119,7 @@ aaudio_data_callback_result_t AAudioCapture::DataCallbackStatic(
         void* userData,
         void* audioData,
         int32_t numFrames) {
+    (void)stream;  // Suppress unused parameter warning
 
     auto* capture = static_cast<AAudioCapture*>(userData);
 
@@ -133,6 +135,7 @@ void AAudioCapture::ErrorCallbackStatic(
         AAudioStream* stream,
         void* userData,
         aaudio_result_t error) {
+    (void)stream;  // Suppress unused parameter warning
 
     auto* capture = static_cast<AAudioCapture*>(userData);
 

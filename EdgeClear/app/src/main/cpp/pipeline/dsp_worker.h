@@ -8,14 +8,32 @@
 #include "../aec/aec.h"
 #include "../aec/dtd.h"
 #include "../aec/res.h"
+#ifdef HAVE_TFLITE
 #include "../ml/denoiser_model.h"
 #include "../ml/denoiser_inference.h"
+#endif
 #include <thread>
 #include <atomic>
 #include <memory>
 
+// Forward declarations for ML types when TFLite is not available
+#ifndef HAVE_TFLITE
 namespace edgeclear {
-namespace pipeline {
+namespace ml {
+struct DenoiserModelState;
+struct DenoiserInference;
+}  // namespace ml
+}  // namespace edgeclear
+#endif
+
+namespace edgeclear {
+
+// Forward declaration for WAV writer
+namespace audio_io {
+class WavWriter;
+}
+
+namespace pipeline{
 
 /**
  * DSPWorker: Non-RT DSP processing thread
@@ -24,6 +42,7 @@ namespace pipeline {
  * - Dequeue frame from input queue
  * - Process through DSP pipeline (STFT → AEC → RES → Denoiser → ISTFT)
  * - Enqueue to output queue
+ * - Write samples to WAV files if recording (Phase 6)
  *
  * Constitution requirements:
  * - Complete processing in <6 ms per 10 ms hop (60% duty cycle)
@@ -65,16 +84,30 @@ public:
      */
     void SetAECEnabled(bool enabled) { aec_enabled_ = enabled; }
 
+#ifdef HAVE_TFLITE
     /**
      * Enable/disable denoiser processing.
      */
     void SetDenoiserEnabled(bool enabled) { denoiser_enabled_ = enabled; }
+#endif
 
     /**
      * Get current DTD state.
      */
     aec::DTD::State GetDTDState() const {
         return dtd_ ? dtd_->GetState() : aec::DTD::SILENCE;
+    }
+
+    /**
+     * Set WAV writers for recording (Phase 6).
+     * Pass nullptr to disable recording.
+     */
+    void SetRecordingWriters(audio_io::WavWriter* raw_writer,
+                              audio_io::WavWriter* far_end_writer,
+                              audio_io::WavWriter* enhanced_writer) {
+        raw_writer_ = raw_writer;
+        far_end_writer_ = far_end_writer;
+        enhanced_writer_ = enhanced_writer;
     }
 
 private:
@@ -109,10 +142,17 @@ private:
     std::unique_ptr<aec::RES> res_;
     bool aec_enabled_;
 
+#ifdef HAVE_TFLITE
     // Phase 5 M3: Denoiser modules
     ml::DenoiserModelState* denoiser_model_;  // Not owned (managed by SessionManager)
     std::unique_ptr<ml::DenoiserInference> denoiser_;
     bool denoiser_enabled_;
+#endif
+
+    // Phase 6: Recording WAV writers (not owned, managed by SessionManager)
+    audio_io::WavWriter* raw_writer_ = nullptr;
+    audio_io::WavWriter* far_end_writer_ = nullptr;
+    audio_io::WavWriter* enhanced_writer_ = nullptr;
 
     // Processing buffers (pre-allocated, reused across frames)
     float near_spectrum_[322];   // Near-end FFT (161 complex bins = 322 floats)

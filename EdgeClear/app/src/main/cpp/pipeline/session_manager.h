@@ -6,13 +6,26 @@
 #include "../audio_io/aaudio_capture.h"
 #include "../audio_io/aaudio_render.h"
 #include "../audio_io/audio_callback.h"
+#include "../audio_io/wav_writer.h"
 #include "../rt/ring_buffer.h"
 #include "../rt/frame_buffer.h"
 #include "../rt/perf_counters.h"
+#ifdef HAVE_TFLITE
 #include "../ml/denoiser_model.h"
+#endif
 #include <android/asset_manager.h>
 #include <memory>
 #include <string>
+#include <atomic>
+
+// Forward declarations for ML types when TFLite is not available
+#ifndef HAVE_TFLITE
+namespace edgeclear {
+namespace ml {
+struct DenoiserModelState;
+}  // namespace ml
+}  // namespace edgeclear
+#endif
 
 namespace edgeclear {
 namespace pipeline {
@@ -26,6 +39,7 @@ namespace pipeline {
  * - Start DSP worker thread
  * - Manage session lifecycle
  * - Provide metrics to JNI
+ * - Manage A/B recording (Phase 6)
  *
  * This is the main orchestrator called from JNI layer.
  */
@@ -75,6 +89,40 @@ public:
      */
     bool IsActive() const;
 
+    /**
+     * Start A/B recording.
+     *
+     * @param raw_path Path to raw microphone WAV file
+     * @param far_end_path Path to far-end reference WAV file
+     * @param enhanced_path Path to enhanced output WAV file
+     * @param metadata_path Path to metadata JSON file
+     * @return true on success, false if already recording
+     */
+    bool StartRecording(const std::string& raw_path,
+                        const std::string& far_end_path,
+                        const std::string& enhanced_path,
+                        const std::string& metadata_path);
+
+    /**
+     * Stop A/B recording and write metadata.
+     *
+     * @return true if recording was active
+     */
+    bool StopRecording();
+
+    /**
+     * Check if currently recording.
+     */
+    bool IsRecording() const { return is_recording_.load(std::memory_order_acquire); }
+
+    /**
+     * Get WAV writers for DSP worker to write samples.
+     * Returns nullptr if not recording.
+     */
+    audio_io::WavWriter* GetRawWriter() { return is_recording_ ? raw_writer_.get() : nullptr; }
+    audio_io::WavWriter* GetFarEndWriter() { return is_recording_ ? far_end_writer_.get() : nullptr; }
+    audio_io::WavWriter* GetEnhancedWriter() { return is_recording_ ? enhanced_writer_.get() : nullptr; }
+
 private:
     // AAudio streams
     std::unique_ptr<audio_io::AAudioCapture> capture_;
@@ -97,8 +145,10 @@ private:
     // Metrics accumulator
     std::unique_ptr<MetricsAccumulator> metrics_;
 
+#ifdef HAVE_TFLITE
     // Phase 5 M3: Denoiser model state
     std::unique_ptr<ml::DenoiserModelState> denoiser_model_;
+#endif
 
     // Session state
     bool is_initialized_;
@@ -106,6 +156,13 @@ private:
     int32_t sample_rate_;
     int32_t hop_size_;
     std::string preset_;
+
+    // Recording state (Phase 6)
+    std::atomic<bool> is_recording_{false};
+    std::unique_ptr<audio_io::WavWriter> raw_writer_;
+    std::unique_ptr<audio_io::WavWriter> far_end_writer_;
+    std::unique_ptr<audio_io::WavWriter> enhanced_writer_;
+    std::string metadata_path_;
 
     /**
      * Initialize denoiser model from assets.

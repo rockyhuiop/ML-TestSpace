@@ -50,7 +50,7 @@ public:
      * Pass if max_deviation < 0.5/32768 (0.5 LSB @ int16).
      */
     static float ValidateCOLA(const float* window) {
-        constexpr float kLsbThreshold = 0.5f / 32768.0f;
+        [[maybe_unused]] constexpr float kLsbThreshold = 0.5f / 32768.0f;
         float max_deviation = 0.0f;
 
         // Check 50% overlap: window[i]^2 + window[i + hop]^2 == 1.0

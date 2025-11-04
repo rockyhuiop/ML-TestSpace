@@ -108,7 +108,7 @@ private:
     float erle_db_;
 
     // pffft workspace (TODO: replace stub)
-    void* fft_setup_;
+    [[maybe_unused]] void* fft_setup_;
 
     // Internal methods
     void UpdatePowerEstimate(const float* spectrum, float* power_out);

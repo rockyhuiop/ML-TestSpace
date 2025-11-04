@@ -39,6 +39,10 @@ class MonitorViewModel(application: Application) : AndroidViewModel(application)
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
+    // Phase 6: Recording lock state (shared with RecordViewModel)
+    private val _isRecordingActive = MutableStateFlow(false)
+    val isRecordingActive: StateFlow<Boolean> = _isRecordingActive.asStateFlow()
+
     private var sessionHandle: Long = 0
 
     /**
@@ -139,6 +143,43 @@ class MonitorViewModel(application: Application) : AndroidViewModel(application)
      */
     fun clearError() {
         _errorMessage.value = null
+    }
+
+    /**
+     * Phase 6 T080: Check if component toggles should be locked during recording.
+     *
+     * This method will be called by component toggle handlers (Phase 8) to prevent
+     * changing AEC/RES/Denoiser/AV-VAD settings while recording is active.
+     *
+     * @return true if recording is active and toggles should be locked
+     */
+    fun isComponentToggleLocked(): Boolean {
+        return _isRecordingActive.value
+    }
+
+    /**
+     * Phase 6 T080: Set recording active state (called by RecordViewModel).
+     *
+     * This is a temporary solution for Phase 6. In production, this would be
+     * managed via shared ViewModel or dependency injection.
+     *
+     * @param isRecording true if recording is active
+     */
+    fun setRecordingActive(isRecording: Boolean) {
+        _isRecordingActive.value = isRecording
+    }
+
+    /**
+     * Phase 6 T081: Get error message for component toggle attempt during recording.
+     *
+     * @return Error message if locked, null if allowed
+     */
+    fun onComponentToggleAttempt(): String? {
+        return if (isComponentToggleLocked()) {
+            "Cannot change components during recording"
+        } else {
+            null
+        }
     }
 
     override fun onCleared() {

@@ -6,7 +6,13 @@
       "Bash(.specify/scripts/bash/check-prerequisites.sh:*)",
       "Bash(.specify/scripts/bash/setup-plan.sh:*)",
       "Bash(.specify/scripts/bash/update-agent-context.sh:*)",
-      "Bash(git rev-parse:*)"
+      "Bash(git rev-parse:*)",
+      "Bash(if [ -d \"F:/MyDatabase/CAREER/TestSpace/ML-TestSpace/specs/001-edgeclear-av-vad/checklists\" ])",
+      "Bash(then echo \"EXISTS\")",
+      "Bash(else echo \"NOT_FOUND\")",
+      "Bash(fi:*)",
+      "Bash(sha256sum:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []

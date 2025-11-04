@@ -79,6 +79,7 @@ Java_com_edgeclear_jni_NativeAudioEngine_nativeDestroySession(
         JNIEnv* env,
         jobject /* this */,
         jlong session_handle) {
+    (void)env;  // Unused parameter
 
     LOGI("nativeDestroySession: handle=%lld", static_cast<long long>(session_handle));
 
@@ -105,6 +106,8 @@ Java_com_edgeclear_jni_NativeAudioEngine_nativeSetComponentState(
         jboolean res_enabled,
         jboolean denoiser_enabled,
         jboolean av_vad_enabled) {
+    (void)env;  // Unused parameter
+    (void)session_handle;  // Unused in stub implementation
 
     LOGI("nativeSetComponentState: AEC=%d RES=%d Denoiser=%d AV-VAD=%d",
          aec_enabled, res_enabled, denoiser_enabled, av_vad_enabled);
@@ -188,12 +191,40 @@ Java_com_edgeclear_jni_NativeAudioEngine_nativeStartRecording(
         jstring raw_path,
         jstring far_path,
         jstring enhanced_path,
-        jint duration_sec) {
+        jstring metadata_path) {
 
-    LOGI("nativeStartRecording: duration=%d sec", duration_sec);
+    if (session_handle == 0) {
+        LOGE("Invalid session handle");
+        return JNI_FALSE;
+    }
 
-    // TODO: Open WAV files, start recording state machine
-    return JNI_TRUE;  // Stub: always succeed
+    // Convert jstrings to C++ strings
+    const char* raw_path_str = env->GetStringUTFChars(raw_path, nullptr);
+    const char* far_path_str = env->GetStringUTFChars(far_path, nullptr);
+    const char* enhanced_path_str = env->GetStringUTFChars(enhanced_path, nullptr);
+    const char* metadata_path_str = env->GetStringUTFChars(metadata_path, nullptr);
+
+    LOGI("nativeStartRecording");
+    LOGI("  Raw: %s", raw_path_str);
+    LOGI("  Far-end: %s", far_path_str);
+    LOGI("  Enhanced: %s", enhanced_path_str);
+    LOGI("  Metadata: %s", metadata_path_str);
+
+    auto* session = reinterpret_cast<pipeline::SessionManager*>(session_handle);
+    bool success = session->StartRecording(
+        std::string(raw_path_str),
+        std::string(far_path_str),
+        std::string(enhanced_path_str),
+        std::string(metadata_path_str)
+    );
+
+    // Release strings
+    env->ReleaseStringUTFChars(raw_path, raw_path_str);
+    env->ReleaseStringUTFChars(far_path, far_path_str);
+    env->ReleaseStringUTFChars(enhanced_path, enhanced_path_str);
+    env->ReleaseStringUTFChars(metadata_path, metadata_path_str);
+
+    return success ? JNI_TRUE : JNI_FALSE;
 }
 
 /**
@@ -206,11 +237,19 @@ Java_com_edgeclear_jni_NativeAudioEngine_nativeStopRecording(
         JNIEnv* env,
         jobject /* this */,
         jlong session_handle) {
+    (void)env;  // Unused parameter
+
+    if (session_handle == 0) {
+        LOGE("Invalid session handle");
+        return JNI_FALSE;
+    }
 
     LOGI("nativeStopRecording");
 
-    // TODO: Close WAV files, write metadata JSON
-    return JNI_FALSE;  // Stub: no recording was active
+    auto* session = reinterpret_cast<pipeline::SessionManager*>(session_handle);
+    bool success = session->StopRecording();
+
+    return success ? JNI_TRUE : JNI_FALSE;
 }
 
 }  // extern "C"

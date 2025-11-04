@@ -74,7 +74,11 @@ bool SessionManager::Initialize(int32_t sampleRate, int32_t hopSize,
         far_end_queue_.get(),
         perf_counters_.get(),
         metrics_.get(),
+#ifdef HAVE_TFLITE
         denoiser_model_.get()  // May be nullptr if model load failed
+#else
+        nullptr  // TensorFlow Lite not available
+#endif
     );
 
     // Create AAudio streams
@@ -208,6 +212,11 @@ bool SessionManager::IsActive() const {
 }
 
 bool SessionManager::InitializeDenoiser(AAssetManager* assetManager) {
+#ifndef HAVE_TFLITE
+    (void)assetManager;  // Unused when TFLite is disabled
+    LOGI("TensorFlow Lite not available - denoiser disabled");
+    return false;
+#else
     if (!assetManager) {
         LOGI("No AssetManager provided - denoiser disabled");
         return false;
@@ -297,6 +306,158 @@ bool SessionManager::InitializeDenoiser(AAssetManager* assetManager) {
          denoiser_model_->GetOutputScale(), denoiser_model_->GetOutputZeroPoint());
 
     return true;
+#endif
+}
+
+bool SessionManager::StartRecording(const std::string& raw_path,
+                                     const std::string& far_end_path,
+                                     const std::string& enhanced_path,
+                                     const std::string& metadata_path) {
+    // Check if already recording
+    if (is_recording_.load(std::memory_order_acquire)) {
+        LOGE("Already recording");
+        return false;
+    }
+
+    // Check if session is active
+    if (!is_active_) {
+        LOGE("Cannot start recording: session not active");
+        return false;
+    }
+
+    LOGI("Starting A/B recording:");
+    LOGI("  Raw: %s", raw_path.c_str());
+    LOGI("  Far-end: %s", far_end_path.c_str());
+    LOGI("  Enhanced: %s", enhanced_path.c_str());
+    LOGI("  Metadata: %s", metadata_path.c_str());
+
+    // Create WAV writers
+    raw_writer_ = std::make_unique<audio_io::WavWriter>();
+    far_end_writer_ = std::make_unique<audio_io::WavWriter>();
+    enhanced_writer_ = std::make_unique<audio_io::WavWriter>();
+
+    // Open WAV files (48 kHz, mono)
+    if (!raw_writer_->Open(raw_path, sample_rate_, 1)) {
+        LOGE("Failed to open raw WAV file: %s", raw_path.c_str());
+        raw_writer_.reset();
+        return false;
+    }
+
+    if (!far_end_writer_->Open(far_end_path, sample_rate_, 1)) {
+        LOGE("Failed to open far-end WAV file: %s", far_end_path.c_str());
+        raw_writer_->Close();
+        raw_writer_.reset();
+        far_end_writer_.reset();
+        return false;
+    }
+
+    if (!enhanced_writer_->Open(enhanced_path, sample_rate_, 1)) {
+        LOGE("Failed to open enhanced WAV file: %s", enhanced_path.c_str());
+        raw_writer_->Close();
+        far_end_writer_->Close();
+        raw_writer_.reset();
+        far_end_writer_.reset();
+        enhanced_writer_.reset();
+        return false;
+    }
+
+    // Save metadata path for StopRecording
+    metadata_path_ = metadata_path;
+
+    // Wire WAV writers to DSP worker
+    if (dsp_worker_) {
+        dsp_worker_->SetRecordingWriters(raw_writer_.get(), far_end_writer_.get(), enhanced_writer_.get());
+    }
+
+    // Atomically set recording flag (DSP worker will start writing)
+    is_recording_.store(true, std::memory_order_release);
+
+    LOGI("A/B recording started successfully");
+    return true;
+}
+
+bool SessionManager::StopRecording() {
+    // Check if recording
+    if (!is_recording_.load(std::memory_order_acquire)) {
+        LOGE("Not currently recording");
+        return false;
+    }
+
+    LOGI("Stopping A/B recording");
+
+    // Atomically clear recording flag (DSP worker will stop writing)
+    is_recording_.store(false, std::memory_order_release);
+
+    // Close WAV files and update headers
+    bool success = true;
+    if (raw_writer_) {
+        if (!raw_writer_->Close()) {
+            LOGE("Failed to close raw WAV file");
+            success = false;
+        }
+        LOGI("Raw WAV: %zu samples (%.2f sec)",
+             raw_writer_->GetSamplesWritten(),
+             raw_writer_->GetDurationSeconds());
+    }
+
+    if (far_end_writer_) {
+        if (!far_end_writer_->Close()) {
+            LOGE("Failed to close far-end WAV file");
+            success = false;
+        }
+        LOGI("Far-end WAV: %zu samples (%.2f sec)",
+             far_end_writer_->GetSamplesWritten(),
+             far_end_writer_->GetDurationSeconds());
+    }
+
+    if (enhanced_writer_) {
+        if (!enhanced_writer_->Close()) {
+            LOGE("Failed to close enhanced WAV file");
+            success = false;
+        }
+        LOGI("Enhanced WAV: %zu samples (%.2f sec)",
+             enhanced_writer_->GetSamplesWritten(),
+             enhanced_writer_->GetDurationSeconds());
+    }
+
+    // Write metadata JSON
+    if (!metadata_path_.empty() && raw_writer_) {
+        audio_io::MetadataWriter::RecordingMetadata metadata;
+        metadata.session_id = "recording_session"; // TODO: Get from session state
+        metadata.timestamp = "2025-11-04T00:00:00Z"; // TODO: Get actual timestamp
+        metadata.duration_seconds = static_cast<int>(raw_writer_->GetDurationSeconds());
+        metadata.sample_rate = sample_rate_;
+        metadata.raw_file_path = "raw.wav"; // Relative paths in JSON
+        metadata.far_end_file_path = "far_end.wav";
+        metadata.enhanced_file_path = "enhanced.wav";
+        metadata.aec_enabled = true; // TODO: Read from component state
+        metadata.res_enabled = true;
+        metadata.denoiser_enabled = true;
+        metadata.av_vad_enabled = false;
+        metadata.device_model = "Unknown"; // TODO: Get from Android properties
+        metadata.os_version = "Android";
+
+        if (!audio_io::MetadataWriter::WriteMetadata(metadata_path_, metadata)) {
+            LOGE("Failed to write metadata JSON");
+            success = false;
+        } else {
+            LOGI("Metadata written to: %s", metadata_path_.c_str());
+        }
+    }
+
+    // Unwire WAV writers from DSP worker
+    if (dsp_worker_) {
+        dsp_worker_->SetRecordingWriters(nullptr, nullptr, nullptr);
+    }
+
+    // Release writers
+    raw_writer_.reset();
+    far_end_writer_.reset();
+    enhanced_writer_.reset();
+    metadata_path_.clear();
+
+    LOGI("A/B recording stopped");
+    return success;
 }
 
 }  // namespace pipeline

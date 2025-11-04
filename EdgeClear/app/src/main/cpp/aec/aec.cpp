@@ -92,7 +92,7 @@ void AEC::ProcessHop(const float* near_end,
     // 5. Update ERLE estimate
 
     // Compute simple power ratio for stub ERLE
-    float near_power = 1e-10f;
+    [[maybe_unused]] float near_power = 1e-10f;
     float far_power = 1e-10f;
     for (int i = 0; i < kHopSize; ++i) {
         near_power += near_end[i] * near_end[i];
@@ -100,6 +100,7 @@ void AEC::ProcessHop(const float* near_end,
     }
 
     // Stub ERLE: Assume 15 dB suppression when far-end is active
+    // TODO: Use near_power for proper ERLE calculation in full implementation
     if (far_power > 1e-6f && !is_double_talk) {
         erle_db_ = 15.0f;  // Fake value for M2 milestone
     } else {

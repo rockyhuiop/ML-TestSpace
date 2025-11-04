@@ -61,8 +61,36 @@ object NativeAudioEngine {
         rawPath: String,
         farPath: String,
         enhancedPath: String,
-        durationSec: Int
+        metadataPath: String
     ): Boolean  // Returns true on success
 
     external fun nativeStopRecording(sessionHandle: Long): Boolean
+
+    // Convenience wrappers (using managed session handle)
+    private var currentSessionHandle: Long = 0L
+
+    fun setSessionHandle(handle: Long) {
+        currentSessionHandle = handle
+    }
+
+    fun startRecording(
+        rawPath: String,
+        farEndPath: String,
+        enhancedPath: String,
+        metadataPath: String
+    ): Boolean {
+        return if (currentSessionHandle != 0L) {
+            nativeStartRecording(currentSessionHandle, rawPath, farEndPath, enhancedPath, metadataPath)
+        } else {
+            false
+        }
+    }
+
+    fun stopRecording(): Boolean {
+        return if (currentSessionHandle != 0L) {
+            nativeStopRecording(currentSessionHandle)
+        } else {
+            false
+        }
+    }
 }

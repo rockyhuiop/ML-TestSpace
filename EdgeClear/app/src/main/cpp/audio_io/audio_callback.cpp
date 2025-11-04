@@ -1,7 +1,9 @@
 #include "audio_callback.h"
 #include <android/log.h>
 #include <cstring>
+#ifdef __ARM_NEON
 #include <arm_neon.h>  // For FTZ/DAZ on ARM
+#endif
 
 #define LOG_TAG "EdgeClear-Callback"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
@@ -95,12 +97,21 @@ void AudioCallback::OnRenderData(int16_t* data, int32_t numFrames) {
 
 void AudioCallback::EnableDenormalFlush() {
 #ifdef __ARM_NEON
-    // Enable FTZ (Flush-To-Zero) and DAZ (Denormals-Are-Zero) on ARM
+    // Enable FTZ (Flush-To-Zero) on ARM NEON
     // This prevents denormal numbers from degrading performance
+#ifdef __aarch64__
+    // ARM64: use FPCR register
     uint64_t fpcr;
     __asm__ __volatile__("mrs %0, fpcr" : "=r"(fpcr));
     fpcr |= (1 << 24);  // FZ bit: flush denormals to zero
     __asm__ __volatile__("msr fpcr, %0" : : "r"(fpcr));
+#else
+    // ARM32: use FPSCR register
+    uint32_t fpscr;
+    __asm__ __volatile__("vmrs %0, fpscr" : "=r"(fpscr));
+    fpscr |= (1 << 24);  // FZ bit: flush denormals to zero
+    __asm__ __volatile__("vmsr fpscr, %0" : : "r"(fpscr));
+#endif
 #endif
 }
 

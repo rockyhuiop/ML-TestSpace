@@ -1,4 +1,6 @@
 #include "dsp_worker.h"
+#include "metrics_accumulator.h"
+#include "audio_io/wav_writer.h"
 #include <android/log.h>
 #include <cstring>
 #include <cmath>
@@ -23,9 +25,12 @@ DSPWorker::DSPWorker(
       perf_counters_(perf_counters),
       metrics_(metrics),
       is_running_(false),
-      aec_enabled_(true),  // Enable AEC by default
-      denoiser_model_(denoiser_model),
-      denoiser_enabled_(false) {  // Denoiser disabled by default (needs model)
+      aec_enabled_(true)  // Enable AEC by default
+#ifdef HAVE_TFLITE
+      ,denoiser_model_(denoiser_model),
+      denoiser_enabled_(false)  // Denoiser disabled by default (needs model)
+#endif
+      {
 
     // Allocate DSP modules (separate STFT instances to avoid overlap state corruption)
     stft_error_ = std::make_unique<dsp::STFT>();
@@ -44,6 +49,7 @@ DSPWorker::DSPWorker(
         aec_enabled_ = false;
     }
 
+#ifdef HAVE_TFLITE
     // Phase 5 M3: Initialize denoiser (if model provided)
     if (denoiser_model_ && denoiser_model_->IsReady()) {
         denoiser_ = std::make_unique<ml::DenoiserInference>();
@@ -57,6 +63,10 @@ DSPWorker::DSPWorker(
     } else {
         LOGI("Denoiser not available (no model provided)");
     }
+#else
+    (void)denoiser_model;  // Suppress unused parameter warning
+    LOGI("TensorFlow Lite not available - denoiser disabled");
+#endif
 
     // Zero processing buffers
     std::memset(near_spectrum_, 0, sizeof(near_spectrum_));
@@ -70,7 +80,12 @@ DSPWorker::DSPWorker(
 
     LOGI("DSPWorker initialized (AEC %s, Denoiser %s)",
          aec_enabled_ ? "enabled" : "disabled",
-         denoiser_enabled_ ? "enabled" : "disabled");
+#ifdef HAVE_TFLITE
+         denoiser_enabled_ ? "enabled" : "disabled"
+#else
+         "not available (TFLite disabled)"
+#endif
+         );
 }
 
 DSPWorker::~DSPWorker() {
@@ -144,6 +159,11 @@ void DSPWorker::WorkerLoop() {
 
 void DSPWorker::ProcessFrame(const rt::DSPFrameBuffer& input,
                               rt::DSPFrameBuffer& output) {
+    // Phase 6: Capture raw input for recording (before any processing)
+    if (raw_writer_) {
+        raw_writer_->WriteSamples(input.samples, rt::DSPFrameBuffer::kFrameSize);
+    }
+
     // Convert int16 to float for DSP processing
     input.ToFloat(near_time_);
 
@@ -151,6 +171,11 @@ void DSPWorker::ProcessFrame(const rt::DSPFrameBuffer& input,
     rt::DSPFrameBuffer far_end_frame;
     if (far_end_queue_->Pop(far_end_frame)) {
         far_end_frame.ToFloat(far_time_);
+
+        // Phase 6: Capture far-end reference for recording
+        if (far_end_writer_) {
+            far_end_writer_->WriteSamples(far_end_frame.samples, rt::DSPFrameBuffer::kFrameSize);
+        }
     } else {
         // No far-end available (queue empty) - use silence
         std::memset(far_time_, 0, sizeof(far_time_));
@@ -194,6 +219,7 @@ void DSPWorker::ProcessFrame(const rt::DSPFrameBuffer& input,
         }
     }
 
+#ifdef HAVE_TFLITE
     // Phase 5 M3: Denoiser processing (frequency domain)
     if (denoiser_enabled_ && denoiser_ && denoiser_->IsReady()) {
         // Step 1: Compute magnitude spectrum from complex error_spectrum_
@@ -237,6 +263,7 @@ void DSPWorker::ProcessFrame(const rt::DSPFrameBuffer& input,
             LOGE("Denoiser inference failed - passing through");
         }
     }
+#endif
 
     // ISTFT: Frequency domain → Time domain
     istft_->ProcessHop(error_spectrum_, output_time_);
@@ -247,6 +274,11 @@ void DSPWorker::ProcessFrame(const rt::DSPFrameBuffer& input,
     // Copy timestamp and clipping flag
     output.timestamp = input.timestamp;
     output.is_clipping = input.is_clipping || output.is_clipping;
+
+    // Phase 6: Capture enhanced output for recording (after all processing)
+    if (enhanced_writer_) {
+        enhanced_writer_->WriteSamples(output.samples, rt::DSPFrameBuffer::kFrameSize);
+    }
 }
 
 }  // namespace pipeline

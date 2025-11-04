@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 namespace edgeclear {
 namespace audio_io {
 
@@ -21,6 +23,7 @@ public:
      * @return Estimated latency in milliseconds
      */
     static float MeasureLatency(int32_t sampleRate, int32_t bufferHops) {
+        (void)sampleRate;  // Unused in stub implementation
         // Stub: Estimate latency from buffer configuration
         // Formula: (input buffer + output buffer + processing) latency
         // Input/output: 1 hop each = 10 ms * 2 = 20 ms

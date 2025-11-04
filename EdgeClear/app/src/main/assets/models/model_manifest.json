@@ -3,7 +3,7 @@
   "models": {
     "denoiser_int8_v1": {
       "filename": "denoiser_tcn_int8.tflite",
-      "sha256": "placeholder_sha256_hash_will_be_computed_from_actual_model_file",
+      "sha256": "291BDD74F1427A1B9BC8524406212FF4766DEFE6354D53542F64858B3238F780",
       "description": "TCN-based denoiser, INT8 quantized, 161 frequency bins",
       "architecture": {
         "type": "TCN",
@@ -30,12 +30,12 @@
         "epochs": 100,
         "validation_sisdr": 12.5
       },
-      "status": "placeholder",
+      "status": "trained",
       "notes": [
-        "This is a placeholder manifest.",
-        "Actual model file needs to be trained and placed in this directory.",
-        "SHA-256 hash must be computed from the actual .tflite file.",
-        "Model loading will fail gracefully if file is missing."
+        "Model trained on November 4, 2025",
+        "Dataset: DNS Challenge 4 (Microsoft Azure)",
+        "Model size: 242 KB",
+        "SHA-256 verified and validated"
       ]
     }
   }

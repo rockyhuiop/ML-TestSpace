@@ -65,6 +65,23 @@ fun MonitorScreen(
             )
         }
 
+        // Phase 8 TODO: Component toggles will be added here (AEC, RES, Denoiser, AV-VAD)
+        // Phase 6 T081: When toggles are added, implement lock check:
+        //   val isRecordingActive by viewModel.isRecordingActive.collectAsState()
+        //   val snackbarHostState = remember { SnackbarHostState() }
+        //
+        //   In each toggle onClick:
+        //     if (isRecordingActive) {
+        //         scope.launch {
+        //             snackbarHostState.showSnackbar(
+        //                 message = "Cannot change components during recording",
+        //                 duration = SnackbarDuration.Short
+        //             )
+        //         }
+        //     } else {
+        //         // Allow toggle
+        //     }
+
         // Error message
         if (errorMessage != null) {
             Text(

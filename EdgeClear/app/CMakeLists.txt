@@ -17,8 +17,11 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffast-math -fno-exceptions -fno-rtti")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fvisibility=hidden")
 
 # ARM NEON optimizations
-if(ANDROID_ABI MATCHES "^armeabi-v7a" OR ANDROID_ABI MATCHES "^arm64-v8a")
+if(ANDROID_ABI MATCHES "^armeabi-v7a")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfpu=neon")
+    add_definitions(-DUSE_NEON=1)
+elseif(ANDROID_ABI MATCHES "^arm64-v8a")
+    # NEON is mandatory on arm64-v8a, no flag needed
     add_definitions(-DUSE_NEON=1)
 endif()
 
@@ -34,6 +37,9 @@ set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O0 -g -DDEBUG")
 find_library(log-lib log)
 find_library(android-lib android)
 find_library(aaudio-lib aaudio)
+
+# Import TensorFlow Lite via prefab (optional for now)
+find_package(tensorflowlite CONFIG)
 
 # pffft library (lightweight FFT)
 add_library(pffft STATIC
@@ -64,16 +70,16 @@ add_library(edgeclear-native SHARED
     src/main/cpp/aec/dtd.cpp
     src/main/cpp/aec/res.cpp
 
-    # ML inference (Phase 5: M3)
-    src/main/cpp/ml/tflite_loader.cpp
-    src/main/cpp/ml/denoiser_inference.cpp
+    # ML inference (Phase 5: M3) - TEMPORARILY DISABLED until TensorFlow Lite prefab is working
+    # src/main/cpp/ml/tflite_loader.cpp
+    # src/main/cpp/ml/denoiser_inference.cpp
 
     # Audio I/O
     src/main/cpp/audio_io/aaudio_capture.cpp
     src/main/cpp/audio_io/aaudio_render.cpp
     src/main/cpp/audio_io/audio_callback.cpp
     src/main/cpp/audio_io/latency_probe.cpp
-    # src/main/cpp/audio_io/wav_writer.cpp  # Phase 6: A/B Recording
+    src/main/cpp/audio_io/wav_writer.cpp  # Phase 6: A/B Recording
 
     # AV-VAD (Phase 9: optional A+ feature)
     # src/main/cpp/av_vad/audio_vad.cpp
@@ -104,9 +110,15 @@ target_link_libraries(edgeclear-native
     ${android-lib}
     ${aaudio-lib}
     pffft
-    tensorflowlite_jni
-    crypto
 )
+
+# Link TensorFlow Lite if available
+if(tensorflowlite_FOUND)
+    target_link_libraries(edgeclear-native tensorflowlite::tensorflowlite)
+    target_compile_definitions(edgeclear-native PRIVATE HAVE_TFLITE=1)
+else()
+    message(WARNING "TensorFlow Lite not found via prefab - ML inference will be disabled")
+endif()
 
 # Enable testing (optional, for C++ unit tests)
 option(BUILD_TESTING "Build C++ unit tests" OFF)
