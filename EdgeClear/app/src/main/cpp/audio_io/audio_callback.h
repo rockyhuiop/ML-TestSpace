@@ -66,6 +66,21 @@ public:
     static void EnableDenormalFlush();
 
 private:
+    /**
+     * Helper function to decimate one frame from input.
+     * Returns true if a complete frame was produced.
+     *
+     * @param input Input samples @ 48kHz
+     * @param input_count Number of input samples available
+     * @param output Output buffer @ 16kHz (160 samples)
+     * @param output_count Number of samples written to output
+     * @param consumed Number of input samples consumed
+     * @return true if a complete frame (160 samples) was produced
+     */
+    bool DecimateOnce(const int16_t* input, int32_t input_count,
+                      int16_t* output, int32_t* output_count,
+                      int32_t* consumed);
+
     rt::SPSCRingBuffer<rt::DSPFrameBuffer>* input_queue_;
     rt::SPSCRingBuffer<rt::DSPFrameBuffer>* output_queue_;
     rt::SPSCRingBuffer<rt::DSPFrameBuffer>* far_end_queue_;  // AEC reference
@@ -77,6 +92,15 @@ private:
     // Resampler with accumulation buffering
     SimpleResampler capture_resampler_;
     SimpleResampler render_resampler_;
+
+    // Manual buffer for capture (accumulates AAudio bursts into 160-sample frames)
+    int16_t capture_resampler_buffer_[SimpleResampler::kInputFramesPerHop] = {0};
+    int32_t capture_resampler_buffer_size_ = 0;
+
+    // Manual buffer for render (holds leftover samples from 160-sample frames)
+    int16_t render_buffer_[160] = {0};
+    int32_t render_buffer_size_ = 0;
+    int32_t render_buffer_offset_ = 0;
 };
 
 }  // namespace audio_io

@@ -158,6 +158,7 @@ private:
     std::unique_ptr<aec::DTD> dtd_;
     std::unique_ptr<aec::RES> res_;
     bool aec_enabled_;
+    aec::DTD::State previous_dtd_state_{aec::DTD::SILENCE};  // DTD state from previous frame
 
     // Phase 7: Preset control variables (used unconditionally)
     int denoiser_decimation_{1};   // Denoiser decimation rate (1 or 2)

@@ -28,7 +28,7 @@ DSPWorker::DSPWorker(
       aec_enabled_(true)  // Enable AEC by default
 #ifdef HAVE_TFLITE
       ,denoiser_model_(denoiser_model),
-      denoiser_enabled_(false)  // Denoiser disabled by default (needs model)
+      denoiser_enabled_(true)  // Denoiser enabled by default (when model available)
 #endif
       {
 
@@ -62,6 +62,7 @@ DSPWorker::DSPWorker(
         }
     } else {
         LOGI("Denoiser not available (no model provided)");
+        denoiser_enabled_ = false;
     }
 #else
     (void)denoiser_model;  // Suppress unused parameter warning
@@ -126,35 +127,69 @@ void DSPWorker::Stop() {
 void DSPWorker::WorkerLoop() {
     LOGI("DSPWorker loop starting");
 
+    int pop_success_count = 0;
+    int pop_fail_count = 0;
+    int push_fail_count = 0;
+
     while (is_running_.load(std::memory_order_acquire)) {
         rt::DSPFrameBuffer input_frame;
 
         // Try to dequeue input frame
         if (input_queue_->Pop(input_frame)) {
+            pop_success_count++;
+
+            // Log every 100 successful pops
+            if (pop_success_count % 100 == 0) {
+                float cpu_ms = perf_counters_->GetCpuTimeMs();
+                LOGI("DSPWorker: Processed %d frames (pop_fails=%d, push_fails=%d, cpu=%.2f ms)",
+                     pop_success_count, pop_fail_count, push_fail_count, cpu_ms);
+            }
+
             // Start CPU timer
+            uint64_t start_time = rt::PerfCounters::GetTimeUs();
             rt::PerfCounters::ScopedTimer timer(*perf_counters_);
 
             // Process frame
             rt::DSPFrameBuffer output_frame;
             ProcessFrame(input_frame, output_frame);
 
-            // Enqueue output frame
+            // Log actual timing for first few frames
+            if (pop_success_count <= 5) {
+                uint64_t elapsed = rt::PerfCounters::GetTimeUs() - start_time;
+                LOGI("Frame %d: Processing took %llu microseconds (%.2f ms)",
+                     pop_success_count, (unsigned long long)elapsed, elapsed / 1000.0f);
+            }
+
+            // Enqueue output frame (if full, drop frame to prevent blocking)
             if (!output_queue_->Push(output_frame)) {
-                // Output queue full (should not happen if properly sized)
-                perf_counters_->IncrementXRun();
-                LOGE("Output queue overflow - DSP worker too slow?");
+                // Output queue full - render callback is too slow
+                // Drop this frame to prevent blocking the DSP worker
+                push_fail_count++;
+                if (push_fail_count <= 20 || push_fail_count % 100 == 0) {
+                    LOGE("Output queue overflow - dropping frame (total drops: %d)", push_fail_count);
+                }
             }
 
             // Increment frame counter
             perf_counters_->IncrementFrames();
         } else {
+            pop_fail_count++;
+
+            // Log if we're consistently failing to pop
+            if (pop_fail_count == 1000 || pop_fail_count == 10000 || pop_fail_count % 50000 == 0) {
+                LOGE("DSPWorker: Input queue empty for %d consecutive attempts (processed=%d frames)",
+                     pop_fail_count, pop_success_count);
+            }
+
             // No input available - sleep briefly to avoid spinning
             // This is non-RT thread, so sleeping is acceptable
-            std::this_thread::sleep_for(std::chrono::microseconds(500));
+            // Use very short sleep (100μs) for better power efficiency
+            std::this_thread::sleep_for(std::chrono::microseconds(100));
         }
     }
 
-    LOGI("DSPWorker loop exiting");
+    LOGI("DSPWorker loop exiting (processed=%d, pop_fails=%d, push_fails=%d)",
+         pop_success_count, pop_fail_count, push_fail_count);
 }
 
 void DSPWorker::ProcessFrame(const rt::DSPFrameBuffer& input,
@@ -187,7 +222,9 @@ void DSPWorker::ProcessFrame(const rt::DSPFrameBuffer& input,
 
     if (aec_enabled_) {
         // Run AEC in time domain (160 samples)
-        aec_->ProcessHop(near_time_, far_time_, error_time, false);
+        // Use DTD state from previous frame to control adaptation
+        bool is_double_talk = (previous_dtd_state_ == aec::DTD::DOUBLE_TALK);
+        aec_->ProcessHop(near_time_, far_time_, error_time, is_double_talk);
 
         // Update ERLE metrics
         if (metrics_) {
@@ -208,6 +245,9 @@ void DSPWorker::ProcessFrame(const rt::DSPFrameBuffer& input,
         // Run DTD
         aec::DTD::State dtd_state = dtd_->ProcessFrame(
             near_spectrum_, far_spectrum_, error_spectrum_);
+
+        // Store DTD state for next frame's AEC adaptation
+        previous_dtd_state_ = dtd_state;
 
         bool is_double_talk = (dtd_state == aec::DTD::DOUBLE_TALK);
 

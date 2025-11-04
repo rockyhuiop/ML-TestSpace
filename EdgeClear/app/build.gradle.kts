@@ -125,8 +125,10 @@ dependencies {
     implementation("com.google.mlkit:face-detection:16.1.5")
 
     // TensorFlow Lite (for denoiser inference)
+    // Use GPU delegate which includes native library support
     implementation("org.tensorflow:tensorflow-lite:2.14.0")
     implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
+    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
 
     // Testing
     testImplementation("junit:junit:4.13.2")

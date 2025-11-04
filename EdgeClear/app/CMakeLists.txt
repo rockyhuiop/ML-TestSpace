@@ -38,8 +38,14 @@ find_library(log-lib log)
 find_library(android-lib android)
 find_library(aaudio-lib aaudio)
 
-# Import TensorFlow Lite via prefab (optional for now)
-find_package(tensorflowlite CONFIG)
+# TensorFlow Lite: Try to find via prefab, otherwise use manual linking
+find_package(tensorflowlite_jni QUIET)
+if(NOT tensorflowlite_jni_FOUND)
+    find_package(tensorflowlite CONFIG QUIET)
+endif()
+
+# If prefab doesn't work, we'll link against the .so directly from the AAR
+# The .so files are automatically extracted by Gradle to ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
 
 # pffft library (lightweight FFT)
 add_library(pffft STATIC
@@ -70,7 +76,10 @@ add_library(edgeclear-native SHARED
     src/main/cpp/aec/dtd.cpp
     src/main/cpp/aec/res.cpp
 
-    # ML inference (Phase 5: M3) - TEMPORARILY DISABLED until TensorFlow Lite prefab is working
+    # ML inference (Phase 5: M3) - Requires TFLite C++ headers
+    # Standard TFLite AAR doesn't include C++ headers, only Java bindings
+    # To enable: Download TFLite C++ library or build from source
+    # src/main/cpp/ml/denoiser_model.cpp
     # src/main/cpp/ml/tflite_loader.cpp
     # src/main/cpp/ml/denoiser_inference.cpp
 
@@ -112,12 +121,27 @@ target_link_libraries(edgeclear-native
     pffft
 )
 
-# Link TensorFlow Lite if available
-if(tensorflowlite_FOUND)
+# Link TensorFlow Lite
+if(tensorflowlite_jni_FOUND)
+    target_link_libraries(edgeclear-native tensorflowlite_jni::tensorflowlite_jni)
+    target_compile_definitions(edgeclear-native PRIVATE HAVE_TFLITE=1)
+    message(STATUS "TensorFlow Lite found via prefab (tensorflowlite_jni) - ML inference enabled")
+elseif(tensorflowlite_FOUND)
     target_link_libraries(edgeclear-native tensorflowlite::tensorflowlite)
     target_compile_definitions(edgeclear-native PRIVATE HAVE_TFLITE=1)
+    message(STATUS "TensorFlow Lite found via prefab (tensorflowlite) - ML inference enabled")
 else()
-    message(WARNING "TensorFlow Lite not found via prefab - ML inference will be disabled")
+    # Manual linking: TFLite AAR includes libtensorflowlite_jni.so
+    # Gradle automatically extracts it, so we can link against it
+    find_library(tensorflowlite-lib tensorflowlite_jni)
+    if(tensorflowlite-lib)
+        target_link_libraries(edgeclear-native ${tensorflowlite-lib})
+        target_compile_definitions(edgeclear-native PRIVATE HAVE_TFLITE=1)
+        message(STATUS "TensorFlow Lite found as shared library - ML inference enabled")
+    else()
+        message(WARNING "TensorFlow Lite not found - ML inference will be disabled")
+        message(WARNING "Make sure org.tensorflow:tensorflow-lite is in build.gradle dependencies")
+    endif()
 endif()
 
 # Enable testing (optional, for C++ unit tests)

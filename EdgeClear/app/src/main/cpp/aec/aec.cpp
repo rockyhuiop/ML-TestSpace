@@ -71,38 +71,58 @@ void AEC::ProcessHop(const float* near_end,
                      const float* far_end,
                      float* error_out,
                      bool is_double_talk) {
-    // Stub implementation: Pass-through with simple attenuation
-    // TODO: Implement full partitioned-block convolution
+    // Simple passthrough with power-based suppression
+    // Full adaptive filter will be implemented later
 
-    // Copy near-end to output (will be replaced with error signal)
-    std::memcpy(error_out, near_end, kHopSize * sizeof(float));
+    // Compute signal powers
+    float near_power = 0.0f;
+    float far_power = 0.0f;
 
-    // Update far-end history (circular buffer)
-    for (int i = 0; i < kHopSize; ++i) {
-        far_end_history_[far_end_write_idx_] = far_end[i];
-        far_end_write_idx_ = (far_end_write_idx_ + 1) % kFilterLength;
-    }
-
-    // Stub: Simple power-based attenuation (not real AEC)
-    // Real implementation will do:
-    // 1. Transform far-end to frequency domain (all partitions)
-    // 2. Convolve with filter coefficients (echo estimate)
-    // 3. Subtract from near-end (error = near - echo_estimate)
-    // 4. Adapt filter using NLMS (if not double-talk)
-    // 5. Update ERLE estimate
-
-    // Compute simple power ratio for stub ERLE
-    [[maybe_unused]] float near_power = 1e-10f;
-    float far_power = 1e-10f;
     for (int i = 0; i < kHopSize; ++i) {
         near_power += near_end[i] * near_end[i];
         far_power += far_end[i] * far_end[i];
     }
 
-    // Stub ERLE: Assume 15 dB suppression when far-end is active
-    // TODO: Use near_power for proper ERLE calculation in full implementation
+    near_power /= kHopSize;
+    far_power /= kHopSize;
+
+    // Simple suppression when far-end is active
+    // This is a stub - provides some echo reduction without adaptation
+    float suppression = 1.0f;
+
     if (far_power > 1e-6f && !is_double_talk) {
-        erle_db_ = 15.0f;  // Fake value for M2 milestone
+        // When speaker is active, apply gentle suppression
+        // This prevents feedback but allows speech through
+        float ratio = near_power / (far_power + 1e-6f);
+        if (ratio > 1.0f) ratio = 1.0f;
+        suppression = 0.5f + 0.5f * ratio;  // Range: 0.5 to 1.0
+    }
+
+    // Apply suppression and copy to output
+    for (int i = 0; i < kHopSize; ++i) {
+        error_out[i] = near_end[i] * suppression;
+    }
+
+    // Compute error power for ERLE
+    float error_power = 0.0f;
+    for (int i = 0; i < kHopSize; ++i) {
+        error_power += error_out[i] * error_out[i];
+    }
+    error_power /= kHopSize;
+
+    // Update ERLE estimate
+    if (error_power > 1e-10f && near_power > 1e-10f) {
+        float erle_linear = near_power / (error_power + 1e-10f);
+        if (erle_linear < 1.0f) erle_linear = 1.0f;
+        float erle_db_current = 10.0f * std::log10f(erle_linear);
+
+        // Smooth ERLE estimate
+        constexpr float erle_alpha = 0.95f;
+        erle_db_ = erle_alpha * erle_db_ + (1.0f - erle_alpha) * erle_db_current;
+
+        // Clamp to reasonable range
+        if (erle_db_ < 0.0f) erle_db_ = 0.0f;
+        if (erle_db_ > 30.0f) erle_db_ = 30.0f;
     } else {
         erle_db_ = 0.0f;
     }
